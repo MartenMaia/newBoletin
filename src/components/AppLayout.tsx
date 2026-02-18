@@ -3,11 +3,13 @@ import {
   Box,
   Breadcrumbs,
   Button,
+  Divider,
   Drawer,
   Link as MuiLink,
   List,
   ListItemButton,
   ListItemText,
+  ListSubheader,
   Toolbar,
   Typography,
 } from '@mui/material';
@@ -18,17 +20,39 @@ import { mockApi } from '../services/mockApi';
 
 const drawerWidth = 260;
 
-type NavItem = { label: string; to: string; roles: Array<'admin' | 'operador' | 'revisor'> };
+type Role = 'admin' | 'operador' | 'revisor';
 
-const NAV: NavItem[] = [
-  { label: 'Dashboard', to: '/app/dashboard', roles: ['admin', 'operador', 'revisor'] },
-  { label: 'Minha Associação', to: '/app/minha-associacao', roles: ['admin', 'operador', 'revisor'] },
-  { label: 'Bairros', to: '/app/bairros', roles: ['admin', 'operador', 'revisor'] },
-  { label: 'Grupos', to: '/app/grupos', roles: ['admin'] },
-  { label: 'Clientes', to: '/app/clientes', roles: ['admin', 'operador'] },
-  { label: 'Boletins', to: '/app/boletins', roles: ['admin', 'operador', 'revisor'] },
-  { label: 'Histórico de envios', to: '/app/historico-envios', roles: ['admin', 'operador', 'revisor'] },
-  { label: 'Usuários', to: '/app/usuarios', roles: ['admin'] },
+type NavItem = { label: string; to: string; roles: Role[] };
+
+type NavGroup = { label: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Principal',
+    items: [
+      { label: 'Dashboard', to: '/app/dashboard', roles: ['admin', 'operador', 'revisor'] },
+      { label: 'Clientes', to: '/app/clientes', roles: ['admin', 'operador'] },
+    ],
+  },
+  {
+    label: 'Configurações',
+    items: [
+      { label: 'Minha Associação', to: '/app/minha-associacao', roles: ['admin', 'operador', 'revisor'] },
+      { label: 'Usuários', to: '/app/usuarios', roles: ['admin'] },
+      { label: 'Bairros', to: '/app/bairros', roles: ['admin', 'operador', 'revisor'] },
+    ],
+  },
+  {
+    label: 'Relatórios',
+    items: [
+      { label: 'Boletins', to: '/app/boletins', roles: ['admin', 'operador', 'revisor'] },
+      { label: 'Histórico de envios', to: '/app/historico-envios', roles: ['admin', 'operador', 'revisor'] },
+    ],
+  },
+  {
+    label: 'Admin',
+    items: [{ label: 'Grupos', to: '/app/grupos', roles: ['admin'] }],
+  },
 ];
 
 function useBreadcrumbs(pathname: string): Array<{ label: string; to?: string }> {
@@ -75,20 +99,25 @@ export function AppLayout() {
 
   if (!auth.user) return null;
 
-  const items = NAV.filter(function (i) {
-    return i.roles.indexOf(auth.user ? auth.user.role : 'operador') >= 0;
-  });
-
   function handleLogout() {
     auth.logout();
     nav('/login');
   }
 
+  function canSee(item: NavItem): boolean {
+    return item.roles.indexOf(auth.user ? (auth.user.role as Role) : 'operador') >= 0;
+  }
+
   return (
     <Box sx={{ display: 'flex' }}>
-      <AppBar position="fixed" sx={{ zIndex: function (t) {
-        return t.zIndex.drawer + 1;
-      } }}>
+      <AppBar
+        position="fixed"
+        sx={{
+          zIndex: function (t) {
+            return t.zIndex.drawer + 1;
+          },
+        }}
+      >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
           <Typography variant="h6" component="div">
             newBoletin
@@ -115,15 +144,30 @@ export function AppLayout() {
       >
         <Toolbar />
         <Box sx={{ overflow: 'auto' }}>
-          <List>
-            {items.map(function (it) {
-              return (
-                <ListItemButton key={it.to} component={Link} to={it.to} selected={loc.pathname.startsWith(it.to)}>
-                  <ListItemText primary={it.label} />
-                </ListItemButton>
-              );
-            })}
-          </List>
+          {NAV_GROUPS.map(function (group) {
+            var visible = group.items.filter(canSee);
+            if (visible.length === 0) return null;
+
+            return (
+              <List
+                key={group.label}
+                subheader={
+                  <ListSubheader component="div" inset>
+                    {group.label}
+                  </ListSubheader>
+                }
+              >
+                {visible.map(function (it) {
+                  return (
+                    <ListItemButton key={it.to} component={Link} to={it.to} selected={loc.pathname.startsWith(it.to)}>
+                      <ListItemText primary={it.label} />
+                    </ListItemButton>
+                  );
+                })}
+                <Divider />
+              </List>
+            );
+          })}
         </Box>
       </Drawer>
 

@@ -5,7 +5,6 @@ import { useAuth } from '../app/auth';
 import { useToast } from '../app/toast';
 import { FormField } from '../components/FormField';
 import { SEED_CREDENTIALS } from '../services/seed';
-import { mockApi } from '../services/mockApi';
 
 export function LoginPage() {
   const auth = useAuth();
@@ -27,9 +26,9 @@ export function LoginPage() {
     ev.preventDefault();
     setLoading(true);
     try {
-      mockApi.auth.login(email.trim(), senha);
+      auth.login(email.trim(), senha);
       toast.show('Login realizado', 'success');
-      nav('/app/dashboard');
+      nav('/app/dashboard', { replace: true });
     } catch (err) {
       toast.show(err instanceof Error ? err.message : 'Erro ao logar', 'error');
     } finally {
