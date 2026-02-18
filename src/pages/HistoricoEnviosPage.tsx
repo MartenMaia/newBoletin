@@ -4,22 +4,21 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../app/auth';
 import { DataTable } from '../components/DataTable';
 import { mockApi } from '../services/mockApi';
-import type { Boletim, EnvioLog } from '../types/entities';
+import type { EnvioResumoLog } from '../types/entities';
 
 export function HistoricoEnviosPage() {
-  const { user } = useAuth();
-  const [envios, setEnvios] = React.useState<EnvioLog[]>([]);
-  const [boletins, setBoletins] = React.useState<Boletim[]>([]);
+  const auth = useAuth();
+  const [envios, setEnvios] = React.useState<EnvioResumoLog[]>([]);
 
-  React.useEffect(() => {
-    if (!user) return;
-    setEnvios(mockApi.envios.list(user.id));
-    setBoletins(mockApi.boletins.list(user.id));
-  }, [user]);
+  React.useEffect(
+    function () {
+      if (!auth.user) return;
+      setEnvios(mockApi.envios.listResumo(auth.user.id));
+    },
+    [auth.user],
+  );
 
-  if (!user) return null;
-
-  const titleOf = (boletimId: string) => boletins.find((b) => b.id === boletimId)?.titulo ?? boletimId;
+  if (!auth.user) return null;
 
   return (
     <Stack spacing={2}>
@@ -31,21 +30,33 @@ export function HistoricoEnviosPage() {
         rows={envios}
         columns={[
           {
-            key: 'boletim',
-            header: 'Boletim',
-            render: (r) => (
-              <Link to={`/app/boletins/${r.boletimId}`} style={{ color: 'inherit' }}>
-                {titleOf(r.boletimId)}
-              </Link>
-            ),
+            key: 'exec',
+            header: 'Execução',
+            render: function (r) {
+              return (
+                <Link to={'/app/boletins/execucoes/' + r.boletimExecucaoId} style={{ color: 'inherit' }}>
+                  {r.boletimExecucaoId}
+                </Link>
+              );
+            },
           },
-          { key: 'data', header: 'Data', render: (r) => new Date(r.data).toLocaleString() },
-          { key: 'total', header: 'Total', render: (r) => r.total },
-          { key: 'sucesso', header: 'Sucesso', render: (r) => r.sucesso },
-          { key: 'falha', header: 'Falha', render: (r) => r.falha },
+          { key: 'data', header: 'Data', render: function (r) {
+            return new Date(r.data).toLocaleString();
+          } },
+          { key: 'total', header: 'Total', render: function (r) {
+            return r.total;
+          } },
+          { key: 'sucesso', header: 'Sucesso', render: function (r) {
+            return r.sucesso;
+          } },
+          { key: 'falha', header: 'Falha', render: function (r) {
+            return r.falha;
+          } },
         ]}
         searchPlaceholder="Buscar envios"
-        getSearchText={(r) => `${titleOf(r.boletimId)} ${r.total} ${r.sucesso} ${r.falha} ${r.data}`}
+        getSearchText={function (r) {
+          return (r.boletimExecucaoId + ' ' + String(r.total) + ' ' + String(r.sucesso) + ' ' + String(r.falha) + ' ' + r.data).trim();
+        }}
       />
     </Stack>
   );

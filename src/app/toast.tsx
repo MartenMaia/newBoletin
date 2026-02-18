@@ -15,32 +15,30 @@ interface ToastApi {
 
 const ToastContext = React.createContext<ToastApi | undefined>(undefined);
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = React.useState<ToastState>({
-    open: false,
-    message: '',
-    severity: 'info',
-  });
+export function ToastProvider(props: { children: React.ReactNode }) {
+  const [state, setState] = React.useState<ToastState>({ open: false, message: '', severity: 'info' });
 
-  const show = React.useCallback((message: string, severity: ToastSeverity = 'info') => {
-    setState({ open: true, message, severity });
+  const show = React.useCallback(function (message: string, severity: ToastSeverity) {
+    setState({ open: true, message: message, severity: severity });
   }, []);
 
+  function handleClose() {
+    setState(function (s) {
+      return { open: false, message: s.message, severity: s.severity };
+    });
+  }
+
   return (
-    <ToastContext.Provider value={{ show }}>
-      {children}
-      <Snackbar
-        open={state.open}
-        autoHideDuration={3000}
-        onClose={() => setState((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={() => setState((s) => ({ ...s, open: false }))}
-          severity={state.severity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
+    <ToastContext.Provider
+      value={{
+        show: function (message: string, severity?: ToastSeverity) {
+          show(message, severity || 'info');
+        },
+      }}
+    >
+      {props.children}
+      <Snackbar open={state.open} autoHideDuration={3000} onClose={handleClose} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Alert onClose={handleClose} severity={state.severity} variant="filled" sx={{ width: '100%' }}>
           {state.message}
         </Alert>
       </Snackbar>

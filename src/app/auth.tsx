@@ -12,22 +12,27 @@ interface AuthState {
 
 const AuthContext = React.createContext<AuthState | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = React.useState<PublicUser | null>(() => mockApi.auth.getCurrentUser());
+export function AuthProvider(props: { children: React.ReactNode }) {
+  const [user, setUser] = React.useState<PublicUser | null>(function () {
+    return mockApi.auth.getCurrentUser();
+  });
 
-  const login = React.useCallback(async (email: string, senha: string) => {
+  const login = React.useCallback(function (email: string, senha: string) {
     const u = mockApi.auth.login(email, senha);
     setUser(u);
+    return Promise.resolve();
   }, []);
 
-  const logout = React.useCallback(() => {
+  const logout = React.useCallback(function () {
     mockApi.auth.logout();
     setUser(null);
   }, []);
 
-  const value = React.useMemo(() => ({ user, login, logout }), [user, login, logout]);
+  const value = React.useMemo(function () {
+    return { user: user, login: login, logout: logout };
+  }, [user, login, logout]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{props.children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {
@@ -38,5 +43,5 @@ export function useAuth(): AuthState {
 
 export function hasRole(user: PublicUser | null, roles: Role[]): boolean {
   if (!user) return false;
-  return roles.includes(user.role);
+  return roles.indexOf(user.role) >= 0;
 }

@@ -3,27 +3,31 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import { AppLayout } from '../components/AppLayout';
 import { LoginPage } from '../pages/LoginPage';
+import { SignupPage } from '../pages/SignupPage';
 import { DashboardPage } from '../pages/DashboardPage';
-import { AssociacoesPage } from '../pages/AssociacoesPage';
+import { MinhaAssociacaoPage } from '../pages/MinhaAssociacaoPage';
 import { BairrosPage } from '../pages/BairrosPage';
 import { UsuariosPage } from '../pages/UsuariosPage';
 import { ClientesPage } from '../pages/ClientesPage';
-import { BoletinsListPage } from '../pages/BoletinsListPage';
-import { BoletinsNovoPage } from '../pages/BoletinsNovoPage';
-import { BoletimDetalhePage } from '../pages/BoletimDetalhePage';
+import { GruposPage } from '../pages/GruposPage';
+import { BoletinsConfigListPage } from '../pages/boletins/BoletinsConfigListPage';
+import { BoletinsConfigNovoPage } from '../pages/boletins/BoletinsConfigNovoPage';
+import { BoletinsConfigDetalhePage } from '../pages/boletins/BoletinsConfigDetalhePage';
+import { BoletinsExecucaoPage } from '../pages/boletins/BoletinsExecucaoPage';
+import { BoletinsExecucaoStandalonePage } from '../pages/boletins/BoletinsExecucaoStandalonePage';
 import { HistoricoEnviosPage } from '../pages/HistoricoEnviosPage';
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+function RequireAuth(props: { children: React.ReactNode }) {
+  const auth = useAuth();
+  if (!auth.user) return <Navigate to="/login" replace />;
+  return <>{props.children}</>;
 }
 
-function RequireRole({ roles, children }: { roles: Array<'admin' | 'operador' | 'validador'>; children: React.ReactNode }) {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  if (!roles.includes(user.role)) return <Navigate to="/app/dashboard" replace />;
-  return <>{children}</>;
+function RequireRole(props: { roles: Array<'admin' | 'operador' | 'revisor'>; children: React.ReactNode }) {
+  const auth = useAuth();
+  if (!auth.user) return <Navigate to="/login" replace />;
+  if (props.roles.indexOf(auth.user.role) < 0) return <Navigate to="/app/dashboard" replace />;
+  return <>{props.children}</>;
 }
 
 export function AppRouter() {
@@ -31,6 +35,7 @@ export function AppRouter() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
 
       <Route
         path="/app"
@@ -43,22 +48,17 @@ export function AppRouter() {
         <Route path="/app" element={<Navigate to="/app/dashboard" replace />} />
         <Route path="/app/dashboard" element={<DashboardPage />} />
 
-        <Route
-          path="/app/associacoes"
-          element={
-            <RequireRole roles={['admin']}>
-              <AssociacoesPage />
-            </RequireRole>
-          }
-        />
+        <Route path="/app/minha-associacao" element={<MinhaAssociacaoPage />} />
+
         <Route
           path="/app/bairros"
           element={
-            <RequireRole roles={['admin']}>
+            <RequireRole roles={['admin', 'operador', 'revisor']}>
               <BairrosPage />
             </RequireRole>
           }
         />
+
         <Route
           path="/app/usuarios"
           element={
@@ -67,6 +67,16 @@ export function AppRouter() {
             </RequireRole>
           }
         />
+
+        <Route
+          path="/app/grupos"
+          element={
+            <RequireRole roles={['admin']}>
+              <GruposPage />
+            </RequireRole>
+          }
+        />
+
         <Route
           path="/app/clientes"
           element={
@@ -76,16 +86,18 @@ export function AppRouter() {
           }
         />
 
-        <Route path="/app/boletins" element={<BoletinsListPage />} />
+        <Route path="/app/boletins" element={<BoletinsConfigListPage />} />
         <Route
           path="/app/boletins/novo"
           element={
-            <RequireRole roles={['admin', 'operador']}>
-              <BoletinsNovoPage />
+            <RequireRole roles={['admin']}>
+              <BoletinsConfigNovoPage />
             </RequireRole>
           }
         />
-        <Route path="/app/boletins/:id" element={<BoletimDetalhePage />} />
+        <Route path="/app/boletins/:configId" element={<BoletinsConfigDetalhePage />} />
+        <Route path="/app/boletins/:configId/execucoes/:execId" element={<BoletinsExecucaoPage />} />
+        <Route path="/app/boletins/execucoes/:execId" element={<BoletinsExecucaoStandalonePage />} />
 
         <Route path="/app/historico-envios" element={<HistoricoEnviosPage />} />
       </Route>

@@ -1,12 +1,16 @@
 import {
+  Box,
   Button,
   Checkbox,
+  Chip,
   FormControl,
   FormControlLabel,
   InputLabel,
   MenuItem,
+  OutlinedInput,
   Select,
   Stack,
+  Typography,
 } from '@mui/material';
 import React from 'react';
 import { useAuth } from '../app/auth';
@@ -15,15 +19,19 @@ import { DataTable } from '../components/DataTable';
 import { FormField } from '../components/FormField';
 import { Modal } from '../components/Modal';
 import { mockApi } from '../services/mockApi';
-import type { Bairro, Cliente } from '../types/entities';
+import type { Bairro, Cliente, Grupo } from '../types/entities';
 
 type FormState = Omit<Cliente, 'id'>;
 
 export function ClientesPage() {
-  const { user } = useAuth();
+  const auth = useAuth();
   const toast = useToast();
+
   const [rows, setRows] = React.useState<Cliente[]>([]);
   const [bairros, setBairros] = React.useState<Bairro[]>([]);
+  const [grupos, setGrupos] = React.useState<Grupo[]>([]);
+  const [clienteGrupoIds, setClienteGrupoIds] = React.useState<Record<string, string[]>>({});
+
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Cliente | null>(null);
   const [form, setForm] = React.useState<FormState>({
@@ -34,36 +42,62 @@ export function ClientesPage() {
     cadencia: 'diario',
     ativo: true,
   });
-  const [errors, setErrors] = React.useState<Partial<Record<keyof FormState, string>>>({});
+  const [selectedGrupoIds, setSelectedGrupoIds] = React.useState<string[]>([]);
 
-  const refresh = React.useCallback(() => {
-    if (!user) return;
-    setRows(mockApi.clientes.list(user.id));
+  function refresh() {
+    if (!auth.user) return;
+    const userId = auth.user.id;
+    const list = mockApi.clientes.list(userId);
+    setRows(list);
     setBairros(mockApi.lookups.listBairros());
-  }, [user]);
+    setGrupos(mockApi.lookups.listGrupos());
 
-  React.useEffect(() => {
-    refresh();
-  }, [refresh]);
+    var map: Record<string, string[]> = {};
+    list.forEach(function (c) {
+      map[c.id] = mockApi.clienteGrupos
+        .listByCliente(userId, c.id)
+        .map(function (cg) {
+          return cg.grupoId;
+        });
+    });
+    setClienteGrupoIds(map);
+  }
 
-  if (!user) return null;
-  const userId = user.id;
+  React.useEffect(
+    function () {
+      refresh();
+    },
+    [auth.user],
+  );
 
-  const bairroName = (id: string) => bairros.find((b) => b.id === id)?.nome ?? id;
+  if (!auth.user) return null;
+  var userId = auth.user.id;
 
-  function validate(): boolean {
-    const e: typeof errors = {};
-    if (!form.nome.trim()) e.nome = 'Obrigatório';
-    if (!form.telefone.trim()) e.telefone = 'Obrigatório';
-    if (!form.bairroId) e.bairroId = 'Obrigatório';
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  function bairroName(id: string) {
+    var b = bairros.find(function (x) {
+      return x.id === id;
+    });
+    return b ? b.nome : id;
+  }
+
+  function grupoName(id: string) {
+    var g = grupos.find(function (x) {
+      return x.id === id;
+    });
+    return g ? g.nome : id;
+  }
+
+  function validate(): string | null {
+    if (!form.nome.trim()) return 'Nome é obrigatório';
+    if (!form.telefone.trim()) return 'Telefone é obrigatório';
+    if (!form.bairroId) return 'Bairro é obrigatório';
+    return null;
   }
 
   function startCreate() {
     setEditing(null);
-    setForm({ nome: '', telefone: '', email: '', bairroId: bairros[0]?.id ?? '', cadencia: 'diario', ativo: true });
-    setErrors({});
+    setForm({ nome: '', telefone: '', email: '', bairroId: bairros[0] ? bairros[0].id : '', cadencia: 'diario', ativo: true });
+    setSelectedGrupoIds([]);
     setOpen(true);
   }
 
@@ -72,50 +106,69 @@ export function ClientesPage() {
     setForm({
       nome: c.nome,
       telefone: c.telefone,
-      email: c.email ?? '',
+      email: c.email || '',
       bairroId: c.bairroId,
       cadencia: c.cadencia,
       ativo: c.ativo,
     });
-    setErrors({});
+    setSelectedGrupoIds(clienteGrupoIds[c.id] || []);
     setOpen(true);
   }
 
   function onSave() {
-    if (!validate()) return;
+    var err = validate();
+    if (err) {
+      toast.show(err, 'warning');
+      return;
+    }
+
     try {
-      const payload: Omit<Cliente, 'id'> = {
-        nome: form.nome,
-        telefone: form.telefone,
-        email: form.email?.trim() ? form.email.trim() : undefined,
+      var payload: Omit<Cliente, 'id'> = {
+        nome: form.nome.trim(),
+        telefone: form.telefone.trim(),
+        email: form.email && form.email.trim() ? form.email.trim() : undefined,
         bairroId: form.bairroId,
         cadencia: form.cadencia,
         ativo: form.ativo,
       };
 
       if (editing) {
-        mockApi.clientes.update(userId, editing.id, payload);
+        mockApi.clientes.update(userId, editing.id, payload, selectedGrupoIds);
         toast.show('Cliente atualizado', 'success');
       } else {
-        mockApi.clientes.create(userId, payload);
+        mockApi.clientes.create(userId, payload, selectedGrupoIds);
         toast.show('Cliente criado', 'success');
       }
+
       setOpen(false);
       refresh();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Erro', 'error');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'Erro', 'error');
     }
   }
 
   function onDelete(c: Cliente) {
-    if (!confirm(`Excluir cliente "${c.nome}"?`)) return;
+    if (!confirm('Excluir cliente "' + c.nome + '"?')) return;
     try {
       mockApi.clientes.delete(userId, c.id);
       toast.show('Excluído', 'success');
       refresh();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Erro', 'error');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'Erro', 'error');
     }
+  }
+
+  function renderGrupos(c: Cliente) {
+    var ids = clienteGrupoIds[c.id] || [];
+    if (ids.length === 0) return <Typography variant="body2" color="text.secondary">-</Typography>;
+    return (
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        {ids.slice(0, 3).map(function (gid) {
+          return <Chip key={gid} size="small" label={grupoName(gid)} />;
+        })}
+        {ids.length > 3 ? <Chip size="small" label={'+' + String(ids.length - 3)} /> : null}
+      </Box>
+    );
   }
 
   return (
@@ -128,25 +181,44 @@ export function ClientesPage() {
         title="Clientes"
         rows={rows}
         columns={[
-          { key: 'nome', header: 'Nome', render: (r) => r.nome },
-          { key: 'telefone', header: 'Telefone', render: (r) => r.telefone },
-          { key: 'email', header: 'Email', render: (r) => r.email ?? '-' },
-          { key: 'bairro', header: 'Bairro', render: (r) => bairroName(r.bairroId) },
-          { key: 'cadencia', header: 'Cadência', render: (r) => r.cadencia },
-          { key: 'ativo', header: 'Ativo', render: (r) => (r.ativo ? 'Sim' : 'Não') },
+          { key: 'nome', header: 'Nome', render: function (r) {
+            return r.nome;
+          } },
+          { key: 'telefone', header: 'Telefone', render: function (r) {
+            return r.telefone;
+          } },
+          { key: 'bairro', header: 'Bairro', render: function (r) {
+            return bairroName(r.bairroId);
+          } },
+          { key: 'grupos', header: 'Grupos', render: function (r) {
+            return renderGrupos(r);
+          } },
+          { key: 'ativo', header: 'Ativo', render: function (r) {
+            return r.ativo ? 'Sim' : 'Não';
+          } },
         ]}
         onEdit={startEdit}
         onDelete={onDelete}
-        getSearchText={(r) => `${r.nome} ${r.telefone} ${r.email ?? ''} ${bairroName(r.bairroId)}`}
+        getSearchText={function (r) {
+          return (r.nome + ' ' + r.telefone + ' ' + bairroName(r.bairroId) + ' ' + (clienteGrupoIds[r.id] || []).map(grupoName).join(' ')).trim();
+        }}
       />
 
       <Modal
         open={open}
         title={editing ? 'Editar cliente' : 'Novo cliente'}
-        onClose={() => setOpen(false)}
+        onClose={function () {
+          setOpen(false);
+        }}
         actions={
           <>
-            <Button onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={function () {
+                setOpen(false);
+              }}
+            >
+              Cancelar
+            </Button>
             <Button variant="contained" onClick={onSave}>
               Salvar
             </Button>
@@ -154,30 +226,33 @@ export function ClientesPage() {
         }
       >
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <FormField id="cli_nome" label="Nome" value={form.nome} onChange={(v) => setForm((s) => ({ ...s, nome: v }))} required error={errors.nome} />
-          <FormField
-            id="cli_tel"
-            label="Telefone"
-            value={form.telefone}
-            onChange={(v) => setForm((s) => ({ ...s, telefone: v }))}
-            required
-            error={errors.telefone}
-          />
-          <FormField id="cli_email" label="Email (opcional)" value={form.email ?? ''} onChange={(v) => setForm((s) => ({ ...s, email: v }))} />
+          <FormField id="cli_nome" label="Nome" value={form.nome} onChange={function (v) {
+            setForm({ ...form, nome: v });
+          }} required />
+          <FormField id="cli_tel" label="Telefone" value={form.telefone} onChange={function (v) {
+            setForm({ ...form, telefone: v });
+          }} required />
+          <FormField id="cli_email" label="Email (opcional)" value={form.email || ''} onChange={function (v) {
+            setForm({ ...form, email: v });
+          }} />
 
-          <FormControl fullWidth required error={Boolean(errors.bairroId)}>
+          <FormControl fullWidth required>
             <InputLabel id="cli_bairro_label">Bairro</InputLabel>
             <Select
               labelId="cli_bairro_label"
               label="Bairro"
               value={form.bairroId}
-              onChange={(e) => setForm((s) => ({ ...s, bairroId: e.target.value }))}
+              onChange={function (e) {
+                setForm({ ...form, bairroId: String(e.target.value) });
+              }}
             >
-              {bairros.map((b) => (
-                <MenuItem key={b.id} value={b.id}>
-                  {b.nome}
-                </MenuItem>
-              ))}
+              {bairros.map(function (b) {
+                return (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.nome}
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
 
@@ -187,15 +262,49 @@ export function ClientesPage() {
               labelId="cli_cad_label"
               label="Cadência"
               value={form.cadencia}
-              onChange={(e) => setForm((s) => ({ ...s, cadencia: e.target.value as 'diario' | 'semanal' }))}
+              onChange={function (e) {
+                setForm({ ...form, cadencia: e.target.value as any });
+              }}
             >
               <MenuItem value="diario">diario</MenuItem>
               <MenuItem value="semanal">semanal</MenuItem>
             </Select>
           </FormControl>
 
+          <FormControl fullWidth>
+            <InputLabel id="cli_grupos_label">Grupos</InputLabel>
+            <Select
+              labelId="cli_grupos_label"
+              multiple
+              value={selectedGrupoIds}
+              onChange={function (e) {
+                setSelectedGrupoIds(e.target.value as string[]);
+              }}
+              input={<OutlinedInput label="Grupos" />}
+              renderValue={function (selected) {
+                return (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(selected as string[]).map(function (gid) {
+                      return <Chip key={gid} label={grupoName(gid)} size="small" />;
+                    })}
+                  </Box>
+                );
+              }}
+            >
+              {grupos.map(function (g) {
+                return (
+                  <MenuItem key={g.id} value={g.id}>
+                    {g.nome}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </FormControl>
+
           <FormControlLabel
-            control={<Checkbox checked={form.ativo} onChange={(e) => setForm((s) => ({ ...s, ativo: e.target.checked }))} />}
+            control={<Checkbox checked={form.ativo} onChange={function (e) {
+              setForm({ ...form, ativo: e.target.checked });
+            }} />}
             label="Ativo"
           />
         </Stack>

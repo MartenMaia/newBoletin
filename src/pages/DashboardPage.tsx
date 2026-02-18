@@ -3,24 +3,42 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../app/auth';
 import { mockApi } from '../services/mockApi';
-import type { Boletim } from '../types/entities';
-import { StatusBadge } from '../components/StatusBadge';
+import type { BoletimExecucao } from '../types/entities';
 
 export function DashboardPage() {
-  const { user } = useAuth();
-  const [boletins, setBoletins] = React.useState<Boletim[]>([]);
+  const auth = useAuth();
+  const [execs, setExecs] = React.useState<BoletimExecucao[]>([]);
 
-  React.useEffect(() => {
-    if (!user) return;
-    setBoletins(mockApi.boletins.list(user.id));
-  }, [user]);
+  React.useEffect(
+    function () {
+      if (!auth.user) return;
 
-  if (!user) return null;
+      // juntar execuções de todas configs
+      var all: BoletimExecucao[] = [];
+      mockApi.boletinsConfig.list(auth.user.id).forEach(function (c) {
+        all = all.concat(mockApi.boletinsExecucoes.listByConfig(auth.user ? auth.user.id : '', c.id));
+      });
+      all.sort(function (a, b) {
+        return b.geradoEm.localeCompare(a.geradoEm);
+      });
+      setExecs(all);
+    },
+    [auth.user],
+  );
 
-  const pendentes = boletins.filter((b) => b.status === 'pendente_validacao').length;
-  const aprovados = boletins.filter((b) => b.status === 'aprovado').length;
-  const enviados = boletins.filter((b) => b.status === 'enviado').length;
-  const ultimos = boletins.slice(0, 5);
+  if (!auth.user) return null;
+
+  var pendentes = execs.filter(function (e) {
+    return e.status === 'pendente_aprovacao';
+  }).length;
+  var aprovados = execs.filter(function (e) {
+    return e.status === 'aprovado';
+  }).length;
+  var enviados = execs.filter(function (e) {
+    return e.status === 'enviado';
+  }).length;
+
+  var ultimos = execs.slice(0, 5);
 
   return (
     <Stack spacing={2}>
@@ -28,24 +46,18 @@ export function DashboardPage() {
         <Typography variant="h5" component="h1">
           Dashboard
         </Typography>
-        {(user.role === 'admin' || user.role === 'operador') && (
+        {auth.user.role === 'admin' ? (
           <Button component={Link} to="/app/boletins/novo" variant="contained">
-            Criar Boletim
+            Novo Boletim
           </Button>
-        )}
+        ) : null}
       </Box>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-          gap: 2,
-        }}
-      >
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
         <Card aria-label="Card pendentes">
           <CardContent>
             <Typography variant="subtitle2" color="text.secondary">
-              Pendentes
+              Pendentes de aprovação
             </Typography>
             <Typography variant="h4">{pendentes}</Typography>
           </CardContent>
@@ -53,7 +65,7 @@ export function DashboardPage() {
         <Card aria-label="Card aprovados">
           <CardContent>
             <Typography variant="subtitle2" color="text.secondary">
-              Aprovados
+              Aprovados (aguardando envio)
             </Typography>
             <Typography variant="h4">{aprovados}</Typography>
           </CardContent>
@@ -70,44 +82,45 @@ export function DashboardPage() {
 
       <Box>
         <Typography variant="h6" component="h2" sx={{ mb: 1 }}>
-          Últimos boletins
+          Últimas execuções
         </Typography>
         <Stack spacing={1}>
-          {ultimos.map((b) => (
-            <Box
-              key={b.id}
-              component={Link}
-              to={`/app/boletins/${b.id}`}
-              sx={{
-                textDecoration: 'none',
-                color: 'inherit',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                p: 1.5,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 2,
-                '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main' },
-              }}
-            >
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  {b.titulo}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Atualizado em {new Date(b.atualizadoEm).toLocaleString()}
-                </Typography>
+          {ultimos.map(function (e) {
+            return (
+              <Box
+                key={e.id}
+                component={Link}
+                to={'/app/boletins/execucoes/' + e.id}
+                sx={{
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 1.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main' },
+                }}
+              >
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    Execução {e.periodoLabel}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Gerado em {new Date(e.geradoEm).toLocaleString()} • Status {e.status}
+                  </Typography>
+                </Box>
               </Box>
-              <StatusBadge status={b.status} />
-            </Box>
-          ))}
-          {ultimos.length === 0 && (
+            );
+          })}
+          {ultimos.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              Nenhum boletim ainda.
+              Nenhuma execução ainda.
             </Typography>
-          )}
+          ) : null}
         </Stack>
       </Box>
     </Stack>

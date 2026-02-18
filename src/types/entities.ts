@@ -1,15 +1,6 @@
-export type Role = 'admin' | 'operador' | 'validador';
+export type Role = 'admin' | 'operador' | 'revisor';
 
-export type BoletimStatus =
-  | 'rascunho'
-  | 'pendente_validacao'
-  | 'aprovado'
-  | 'rejeitado'
-  | 'enviado';
-
-export type BoletimTipo = 'diario' | 'semanal';
-
-export type BoletimSecao = 'seguranca' | 'eventos' | 'avisos';
+export type Cadencia = 'diario' | 'semanal';
 
 export interface Associacao {
   id: string;
@@ -23,7 +14,6 @@ export interface Associacao {
 export interface Bairro {
   id: string;
   nome: string;
-  associacaoId: string;
 }
 
 export interface Usuario {
@@ -35,43 +25,93 @@ export interface Usuario {
   associacaoId?: string;
 }
 
+export interface Grupo {
+  id: string;
+  nome: string;
+  descricao?: string;
+  criadoEm: string;
+}
+
 export interface Cliente {
   id: string;
   nome: string;
   telefone: string;
   email?: string;
   bairroId: string;
-  cadencia: BoletimTipo;
+  cadencia: Cadencia;
   ativo: boolean;
 }
 
-export interface Boletim {
+export interface ClienteGrupo {
+  id: string;
+  clienteId: string;
+  grupoId: string;
+}
+
+export type BoletimConfigStatus = 'ativo' | 'pausado';
+
+export interface BoletimConfig {
   id: string;
   titulo: string;
-  bairroId: string;
-  associacaoId: string;
-  tipo: BoletimTipo;
-  status: BoletimStatus;
+  tipo: Cadencia;
+  primeiroEnvioEm: string;
+  periodicidade: Cadencia;
+  grupoId: string;
+  revisorUserId: string;
+  status: BoletimConfigStatus;
   criadoPorUserId: string;
   criadoEm: string;
   atualizadoEm: string;
-  aprovadoPorUserId?: string;
-  aprovadoEm?: string;
-  rejeitadoMotivo?: string;
+  proximoEnvioEm: string;
 }
 
-export interface BoletimItem {
+export type BoletimExecucaoStatus = 'pendente_aprovacao' | 'aprovado' | 'rejeitado' | 'enviado';
+
+export interface BoletimExecucao {
   id: string;
-  boletimId: string;
+  boletimConfigId: string;
+  geradoEm: string;
+  periodoLabel: string;
+  status: BoletimExecucaoStatus;
+  aprovadoPorUserId?: string;
+  aprovadoEm?: string;
+  rejeitadoPorUserId?: string;
+  rejeitadoEm?: string;
+  motivo?: string;
+  enviadoEm?: string;
+}
+
+export type BoletimSecao = 'seguranca' | 'eventos' | 'avisos';
+
+export interface BoletimItemTemplate {
+  id: string;
+  boletimConfigId: string;
   secao: BoletimSecao;
   titulo: string;
   conteudo: string;
   criadoEm: string;
 }
 
-export interface EnvioLog {
+export interface BoletimItemExecucao {
   id: string;
-  boletimId: string;
+  boletimExecucaoId: string;
+  secao: BoletimSecao;
+  titulo: string;
+  conteudo: string;
+  criadoEm: string;
+}
+
+export interface EnvioPorClienteLog {
+  id: string;
+  boletimExecucaoId: string;
+  clienteId: string;
+  data: string;
+  status: 'sucesso' | 'falha';
+}
+
+export interface EnvioResumoLog {
+  id: string;
+  boletimExecucaoId: string;
   data: string;
   total: number;
   sucesso: number;
