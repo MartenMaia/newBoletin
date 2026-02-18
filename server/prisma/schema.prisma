@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Bairro {
+  id   String @id
+  nome String
+
+  points BalneabilidadePoint[]
+}
+
+model BalneabilidadeReport {
+  id           String   @id @default(cuid())
+  reportDate   String   @unique
+  reportNumber String?
+  sourceUrl    String
+  downloadedAt DateTime
+  parsedAt     DateTime
+  checksum     String
+
+  samples BalneabilidadeSample[]
+
+  createdAt DateTime @default(now())
+}
+
+model BalneabilidadePoint {
+  id            String  @id @default(cuid())
+  city          String
+  pointNumber   Int
+  balnearioName String
+  locationText  String
+
+  bairroId String?
+  bairro   Bairro? @relation(fields: [bairroId], references: [id])
+
+  samples BalneabilidadeSample[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([city, pointNumber])
+  @@index([bairroId])
+}
+
+enum BalneabilidadeStatus {
+  PROPRIA
+  IMPROPRIA
+  INDETERMINADO
+}
+
+model BalneabilidadeSample {
+  id         String              @id @default(cuid())
+  pointId    String
+  point      BalneabilidadePoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+
+  sampleDate DateTime
+  status     BalneabilidadeStatus
+
+  reportId String
+  report   BalneabilidadeReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([pointId, sampleDate])
+  @@index([sampleDate])
+  @@index([reportId])
+}
+
+model BalneabilidadePointMappingAudit {
+  id              String   @id @default(cuid())
+  pointId          String
+  point            BalneabilidadePoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  oldBairroId      String?
+  newBairroId      String?
+  changedByUserId  String
+  changedAt        DateTime @default(now())
+
+  @@index([pointId])
+}
