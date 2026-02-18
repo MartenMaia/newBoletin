@@ -1,33 +1,36 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   AppBar,
   Box,
   Breadcrumbs,
   Button,
-  Divider,
   Drawer,
   Link as MuiLink,
   List,
   ListItemButton,
   ListItemText,
-  ListSubheader,
   Toolbar,
   Typography,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../app/auth';
 import { mockApi } from '../services/mockApi';
 
-const drawerWidth = 260;
+const drawerWidth = 280;
 
 type Role = 'admin' | 'operador' | 'revisor';
 
 type NavItem = { label: string; to: string; roles: Role[] };
 
-type NavGroup = { label: string; items: NavItem[] };
+type NavGroup = { key: string; label: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
   {
+    key: 'principal',
     label: 'Principal',
     items: [
       { label: 'Dashboard', to: '/app/dashboard', roles: ['admin', 'operador', 'revisor'] },
@@ -35,6 +38,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    key: 'config',
     label: 'Configurações',
     items: [
       { label: 'Minha Associação', to: '/app/minha-associacao', roles: ['admin', 'operador', 'revisor'] },
@@ -43,6 +47,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    key: 'relatorios',
     label: 'Relatórios',
     items: [
       { label: 'Boletins', to: '/app/boletins', roles: ['admin', 'operador', 'revisor'] },
@@ -50,6 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    key: 'admin',
     label: 'Admin',
     items: [{ label: 'Grupos', to: '/app/grupos', roles: ['admin'] }],
   },
@@ -72,11 +78,37 @@ function useBreadcrumbs(pathname: string): Array<{ label: string; to?: string }>
   return crumbs;
 }
 
+function storageKey(): string {
+  return 'newboletin.nav.accordions.v1';
+}
+
+function loadExpanded(): string[] {
+  try {
+    const raw = localStorage.getItem(storageKey());
+    if (!raw) return ['principal'];
+    const val = JSON.parse(raw) as unknown;
+    if (!Array.isArray(val)) return ['principal'];
+    return val.filter(function (x) {
+      return typeof x === 'string';
+    });
+  } catch {
+    return ['principal'];
+  }
+}
+
+function saveExpanded(keys: string[]): void {
+  localStorage.setItem(storageKey(), JSON.stringify(keys));
+}
+
 export function AppLayout() {
   const auth = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const crumbs = useBreadcrumbs(loc.pathname);
+
+  const [expanded, setExpanded] = React.useState<string[]>(function () {
+    return loadExpanded();
+  });
 
   React.useEffect(
     function () {
@@ -106,6 +138,23 @@ export function AppLayout() {
 
   function canSee(item: NavItem): boolean {
     return item.roles.indexOf(auth.user ? (auth.user.role as Role) : 'operador') >= 0;
+  }
+
+  function isExpanded(key: string): boolean {
+    return expanded.indexOf(key) >= 0;
+  }
+
+  function toggleAccordion(key: string): void {
+    var next: string[];
+    if (isExpanded(key)) {
+      next = expanded.filter(function (k) {
+        return k !== key;
+      });
+    } else {
+      next = expanded.concat([key]);
+    }
+    setExpanded(next);
+    saveExpanded(next);
   }
 
   return (
@@ -143,29 +192,39 @@ export function AppLayout() {
         aria-label="Menu lateral"
       >
         <Toolbar />
-        <Box sx={{ overflow: 'auto' }}>
+        <Box sx={{ overflow: 'auto', px: 1, py: 1 }}>
           {NAV_GROUPS.map(function (group) {
             var visible = group.items.filter(canSee);
             if (visible.length === 0) return null;
 
             return (
-              <List
-                key={group.label}
-                subheader={
-                  <ListSubheader component="div" inset>
-                    {group.label}
-                  </ListSubheader>
-                }
+              <Accordion
+                key={group.key}
+                expanded={isExpanded(group.key)}
+                onChange={function () {
+                  toggleAccordion(group.key);
+                }}
+                disableGutters
+                elevation={0}
+                sx={{
+                  '&:before': { display: 'none' },
+                }}
               >
-                {visible.map(function (it) {
-                  return (
-                    <ListItemButton key={it.to} component={Link} to={it.to} selected={loc.pathname.startsWith(it.to)}>
-                      <ListItemText primary={it.label} />
-                    </ListItemButton>
-                  );
-                })}
-                <Divider />
-              </List>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls={group.key + '-content'} id={group.key + '-header'}>
+                  <Typography variant="subtitle2">{group.label}</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 0 }}>
+                  <List dense aria-label={group.label + ' submenu'}>
+                    {visible.map(function (it) {
+                      return (
+                        <ListItemButton key={it.to} component={Link} to={it.to} selected={loc.pathname.startsWith(it.to)}>
+                          <ListItemText primary={it.label} />
+                        </ListItemButton>
+                      );
+                    })}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
             );
           })}
         </Box>
